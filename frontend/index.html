@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PDF Translator — Marathi to English</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+      color: #2d3748;
+    }
+
+    .subtitle {
+      color: #718096;
+      margin-bottom: 2rem;
+      font-size: 0.95rem;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      padding: 2rem;
+      width: 100%;
+      max-width: 860px;
+    }
+
+    /* ── drop zone ── */
+    .drop-zone {
+      border: 2px dashed #cbd5e0;
+      border-radius: 10px;
+      padding: 2.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+    .drop-zone.dragover {
+      border-color: #4299e1;
+      background: #ebf8ff;
+    }
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .drop-zone .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .drop-zone p { color: #718096; font-size: 0.95rem; }
+    .drop-zone .file-name {
+      margin-top: 0.75rem;
+      font-weight: 600;
+      color: #2b6cb0;
+      font-size: 0.9rem;
+    }
+
+    /* ── button ── */
+    button#translateBtn {
+      margin-top: 1.25rem;
+      width: 100%;
+      padding: 0.85rem;
+      background: #3182ce;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button#translateBtn:hover:not(:disabled) { background: #2b6cb0; }
+    button#translateBtn:disabled { background: #a0aec0; cursor: not-allowed; }
+
+    /* ── loader ── */
+    .loader {
+      display: none;
+      margin-top: 1.5rem;
+      text-align: center;
+      color: #718096;
+      font-size: 0.9rem;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 4px solid #e2e8f0;
+      border-top-color: #3182ce;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 0.5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── results ── */
+    .results { display: none; margin-top: 1.75rem; }
+
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .tab-btn {
+      padding: 0.45rem 1.1rem;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #718096;
+      transition: all 0.15s;
+    }
+    .tab-btn.active {
+      border-color: #3182ce;
+      color: #3182ce;
+      background: #ebf8ff;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .text-box {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      white-space: pre-wrap;
+      font-size: 0.88rem;
+      line-height: 1.7;
+      max-height: 420px;
+      overflow-y: auto;
+      color: #2d3748;
+    }
+
+    .copy-btn {
+      margin-top: 0.6rem;
+      padding: 0.4rem 1rem;
+      border: 1px solid #cbd5e0;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: #4a5568;
+      transition: background 0.15s;
+    }
+    .copy-btn:hover { background: #edf2f7; }
+
+    .meta {
+      font-size: 0.8rem;
+      color: #a0aec0;
+      margin-bottom: 0.75rem;
+    }
+
+    .error-box {
+      display: none;
+      margin-top: 1rem;
+      padding: 0.85rem 1rem;
+      background: #fff5f5;
+      border: 1px solid #feb2b2;
+      border-radius: 8px;
+      color: #c53030;
+      font-size: 0.88rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>PDF Translator</h1>
+  <p class="subtitle">Upload a Marathi / bilingual PDF — get English translation instantly</p>
+
+  <div class="card">
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".pdf" aria-label="Upload PDF file" />
+      <div class="icon">📄</div>
+      <p>Drag &amp; drop a PDF here, or <strong>click to browse</strong></p>
+      <div class="file-name" id="fileName"></div>
+    </div>
+
+    <button id="translateBtn" disabled>Translate</button>
+
+    <!-- Loader -->
+    <div class="loader" id="loader">
+      <div class="spinner"></div>
+      Processing PDF — this may take a moment...
+    </div>
+
+    <!-- Error -->
+    <div class="error-box" id="errorBox"></div>
+
+    <!-- Results -->
+    <div class="results" id="results">
+      <div class="meta" id="metaInfo"></div>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="translated">Translated (English)</button>
+        <button class="tab-btn" data-tab="original">Original (OCR)</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-translated">
+        <div class="text-box" id="translatedText"></div>
+        <button class="copy-btn" onclick="copyText('translatedText')">Copy</button>
+      </div>
+
+      <div class="tab-panel" id="tab-original">
+        <div class="text-box" id="originalText"></div>
+        <button class="copy-btn" onclick="copyText('originalText')">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = window.API_URL || "http://localhost:8000/translate";
+
+    const fileInput   = document.getElementById("fileInput");
+    const dropZone    = document.getElementById("dropZone");
+    const fileName    = document.getElementById("fileName");
+    const translateBtn= document.getElementById("translateBtn");
+    const loader      = document.getElementById("loader");
+    const results     = document.getElementById("results");
+    const errorBox    = document.getElementById("errorBox");
+
+    let selectedFile = null;
+
+    // ── file selection ──────────────────────────────────────────────────────
+    fileInput.addEventListener("change", () => handleFile(fileInput.files[0]));
+
+    dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      handleFile(e.dataTransfer.files[0]);
+    });
+
+    function handleFile(file) {
+      if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
+        showError("Please select a valid PDF file.");
+        return;
+      }
+      selectedFile = file;
+      fileName.textContent = file.name;
+      translateBtn.disabled = false;
+      hideError();
+      results.style.display = "none";
+    }
+
+    // ── translate ───────────────────────────────────────────────────────────
+    translateBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      translateBtn.disabled = true;
+      loader.style.display = "block";
+      results.style.display = "none";
+      hideError();
+
+      const form = new FormData();
+      form.append("file", selectedFile);
+
+      try {
+        const res = await fetch(API, { method: "POST", body: form });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.detail || "Server error");
+
+        document.getElementById("metaInfo").textContent = `${data.pages} page(s) processed`;
+        document.getElementById("translatedText").textContent = data.translated;
+        document.getElementById("originalText").textContent = data.original;
+        results.style.display = "block";
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        loader.style.display = "none";
+        translateBtn.disabled = false;
+      }
+    });
+
+    // ── tabs ────────────────────────────────────────────────────────────────
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+      });
+    });
+
+    // ── helpers ─────────────────────────────────────────────────────────────
+    function copyText(id) {
+      navigator.clipboard.writeText(document.getElementById(id).textContent);
+    }
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = "block";
+    }
+    function hideError() {
+      errorBox.style.display = "none";
+    }
+  </script>
+</body>
+</html>
