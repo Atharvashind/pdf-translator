@@ -195,7 +195,7 @@
     <!-- Loader -->
     <div class="loader" id="loader">
       <div class="spinner"></div>
-      Processing PDF — this may take a moment...
+      Processing PDF — if this is the first request, the server may take ~30s to wake up...
     </div>
 
     <!-- Error -->
@@ -270,7 +270,11 @@
       form.append("file", selectedFile);
 
       try {
-        const res = await fetch(API, { method: "POST", body: form });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+
+        const res = await fetch(API, { method: "POST", body: form, signal: controller.signal });
+        clearTimeout(timeout);
         const data = await res.json();
 
         if (!res.ok) throw new Error(data.detail || "Server error");
@@ -280,7 +284,11 @@
         document.getElementById("originalText").textContent = data.original;
         results.style.display = "block";
       } catch (err) {
-        showError(err.message);
+        if (err.name === "AbortError") {
+          showError("Request timed out. The server may be waking up — please try again in 30 seconds.");
+        } else {
+          showError("Failed to reach server. It may be waking up (free tier). Please wait 30s and try again.");
+        }
       } finally {
         loader.style.display = "none";
         translateBtn.disabled = false;
