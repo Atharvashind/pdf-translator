@@ -1,9 +1,5 @@
 services:
   - type: web
     name: pdf-translator-backend
-    runtime: python
-    buildCommand: "apt-get install -y tesseract-ocr tesseract-ocr-mar poppler-utils && pip install -r requirements.txt"
-    startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.0"
+    runtime: docker
+    dockerfilePath: ./Dockerfile
