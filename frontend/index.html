@@ -224,7 +224,7 @@
     <div class="loader" id="loader">
       <div class="spinner"></div>
       <div class="steps">
-        <div class="step" id="step1"><div class="step-dot"></div><span class="step-icon">📤</span> Input received</div>
+        <div class="step" id="step1"><div class="step-dot"></div><span class="step-icon">📤</span> Input received — waking up server (may take ~50s)</div>
         <div class="step" id="step2"><div class="step-dot"></div><span class="step-icon">🔍</span> Extracting text from PDF</div>
         <div class="step" id="step3"><div class="step-dot"></div><span class="step-icon">🌐</span> Translating Marathi to English</div>
         <div class="step" id="step4"><div class="step-dot"></div><span class="step-icon">✅</span> Generating output</div>
@@ -336,7 +336,7 @@
 
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 120000);
+        const timeout = setTimeout(() => controller.abort(), 180000); // 3 min timeout
 
         const res = await fetch(API, { method: "POST", body: form, signal: controller.signal });
         clearTimeout(timeout);
