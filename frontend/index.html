@@ -186,6 +186,44 @@
     }
     .copy-btn:hover { background: #edf2f7; }
 
+    .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.6rem;
+    }
+    .download-btn {
+      padding: 0.4rem 1rem;
+      border: 1px solid #3182ce;
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: #3182ce;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+    .download-btn:hover { background: #ebf8ff; }
+
+    /* ── server status pill ── */
+    .server-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      padding: 0.25rem 0.7rem;
+      border-radius: 999px;
+      margin-bottom: 1.25rem;
+      font-weight: 500;
+    }
+    .server-status.checking { background: #fefcbf; color: #744210; }
+    .server-status.ready    { background: #c6f6d5; color: #22543d; }
+    .server-status.sleeping { background: #fed7d7; color: #742a2a; }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
     .meta {
       font-size: 0.8rem;
       color: #a0aec0;
@@ -208,6 +246,9 @@
 
   <h1>PDF Translator</h1>
   <p class="subtitle">Upload a Marathi / bilingual PDF — get English translation instantly</p>
+  <div class="server-status checking" id="serverStatus">
+    <div class="status-dot"></div> <span id="statusText">Checking server...</span>
+  </div>
 
   <div class="card">
     <!-- Drop zone -->
@@ -244,18 +285,25 @@
 
       <div class="tab-panel active" id="tab-translated">
         <div class="text-box" id="translatedText"></div>
-        <button class="copy-btn" onclick="copyText('translatedText')">Copy</button>
+        <div class="btn-row">
+          <button class="copy-btn" onclick="copyText('translatedText')">Copy</button>
+          <button class="download-btn" onclick="downloadText('translatedText', 'translated.txt')">⬇ Download .txt</button>
+        </div>
       </div>
 
       <div class="tab-panel" id="tab-original">
         <div class="text-box" id="originalText"></div>
-        <button class="copy-btn" onclick="copyText('originalText')">Copy</button>
+        <div class="btn-row">
+          <button class="copy-btn" onclick="copyText('originalText')">Copy</button>
+          <button class="download-btn" onclick="downloadText('originalText', 'original_ocr.txt')">⬇ Download .txt</button>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    const API = "https://pdf-translator-suwg.onrender.com/translate";
+    const API        = "https://pdf-translator-suwg.onrender.com/translate";
+    const HEALTH_URL = "https://pdf-translator-suwg.onrender.com/health";
 
     const fileInput    = document.getElementById("fileInput");
     const dropZone     = document.getElementById("dropZone");
@@ -264,8 +312,29 @@
     const loader       = document.getElementById("loader");
     const results      = document.getElementById("results");
     const errorBox     = document.getElementById("errorBox");
+    const serverStatus = document.getElementById("serverStatus");
+    const statusText   = document.getElementById("statusText");
 
     let selectedFile = null;
+    let serverReady  = false;
+
+    // ── background ping on page load ────────────────────────────────────────
+    async function pingServer() {
+      try {
+        const res = await fetch(HEALTH_URL, { signal: AbortSignal.timeout(60000) });
+        if (res.ok) {
+          serverReady = true;
+          serverStatus.className = "server-status ready";
+          statusText.textContent = "Server ready";
+          // update step1 label now that server is warm
+          document.getElementById("step1").querySelector("span:last-child").textContent = "Input received";
+        } else { throw new Error(); }
+      } catch {
+        serverStatus.className = "server-status sleeping";
+        statusText.textContent = "Server sleeping — first request may take ~50s";
+      }
+    }
+    pingServer();
 
     // ── file selection ──────────────────────────────────────────────────────
     fileInput.addEventListener("change", () => handleFile(fileInput.files[0]));
@@ -290,21 +359,15 @@
 
     // ── step animation ──────────────────────────────────────────────────────
     const STEPS = ["step1","step2","step3","step4"];
-    // Approximate timing: step1 instant, step2 after 2s, step3 after 40% of elapsed, step4 near end
     const STEP_DELAYS = [0, 1500, 8000, 20000];
     let stepTimers = [];
 
     function startSteps() {
-      STEPS.forEach(id => {
-        const el = document.getElementById(id);
-        el.classList.remove("active","done");
-      });
+      STEPS.forEach(id => document.getElementById(id).classList.remove("active","done"));
       stepTimers.forEach(clearTimeout);
       stepTimers = [];
-
       STEP_DELAYS.forEach((delay, i) => {
         stepTimers.push(setTimeout(() => {
-          // mark previous as done
           if (i > 0) document.getElementById(STEPS[i-1]).classList.replace("active","done");
           document.getElementById(STEPS[i]).classList.add("active");
         }, delay));
@@ -314,16 +377,15 @@
     function finishSteps() {
       stepTimers.forEach(clearTimeout);
       STEPS.forEach(id => {
-        const el = document.getElementById(id);
-        el.classList.remove("active");
-        el.classList.add("done");
+        document.getElementById(id).classList.remove("active");
+        document.getElementById(id).classList.add("done");
       });
     }
 
-    // ── translate ───────────────────────────────────────────────────────────
-    translateBtn.addEventListener("click", async () => {
-      if (!selectedFile) return;
+    // ── translate (with 1 auto-retry) ───────────────────────────────────────
+    translateBtn.addEventListener("click", () => doTranslate(1));
 
+    async function doTranslate(attemptsLeft) {
       translateBtn.disabled = true;
       loader.style.display = "block";
       results.style.display = "none";
@@ -336,12 +398,11 @@
 
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 180000); // 3 min timeout
+        const timeout = setTimeout(() => controller.abort(), 180000);
 
         const res = await fetch(API, { method: "POST", body: form, signal: controller.signal });
         clearTimeout(timeout);
         const data = await res.json();
-
         if (!res.ok) throw new Error(data.detail || "Server error");
 
         finishSteps();
@@ -350,20 +411,34 @@
         document.getElementById("metaInfo").textContent =
           `${data.pages} page(s) processed · completed in ${elapsed}s`;
         document.getElementById("translatedText").textContent = data.translated;
-        document.getElementById("originalText").textContent = data.original;
+        document.getElementById("originalText").textContent  = data.original;
         results.style.display = "block";
+
+        // mark server as ready for next time
+        serverStatus.className = "server-status ready";
+        statusText.textContent = "Server ready";
+
       } catch (err) {
         stepTimers.forEach(clearTimeout);
+
+        if (attemptsLeft > 0) {
+          // auto-retry once
+          showError("Server is waking up — retrying automatically...");
+          loader.style.display = "none";
+          setTimeout(() => { hideError(); doTranslate(attemptsLeft - 1); }, 5000);
+          return;
+        }
+
         if (err.name === "AbortError") {
-          showError("Request timed out. The server may be waking up — please try again in 30 seconds.");
+          showError("Request timed out. Please try again.");
         } else {
-          showError("Failed to reach server. It may be waking up (free tier). Please wait 30s and try again.");
+          showError("Failed to reach server. Please try again in a moment.");
         }
       } finally {
         loader.style.display = "none";
         translateBtn.disabled = false;
       }
-    });
+    }
 
     // ── tabs ────────────────────────────────────────────────────────────────
     document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -376,9 +451,22 @@
     });
 
     // ── helpers ─────────────────────────────────────────────────────────────
-    function copyText(id) { navigator.clipboard.writeText(document.getElementById(id).textContent); }
+    function copyText(id) {
+      navigator.clipboard.writeText(document.getElementById(id).textContent);
+    }
+
+    function downloadText(id, filename) {
+      const text = document.getElementById(id).textContent;
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
     function showError(msg) { errorBox.textContent = msg; errorBox.style.display = "block"; }
-    function hideError() { errorBox.style.display = "none"; }
+    function hideError()    { errorBox.style.display = "none"; }
   </script>
 </body>
 </html>
