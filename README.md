@@ -1,26 +1,19 @@
 # 📄 Marathi PDF Text Translator (OCR + NLP)
 
-This project is an AI-based system for detecting, extracting, and translating Marathi text from PDF documents using OCR and Natural Language Processing techniques.
+🔹 Project Description
 
----
+This project implements an NLP-based pipeline for extracting, preprocessing, and translating text from PDF documents. It handles unstructured data and converts it into meaningful multilingual output.
 
-## 🚀 Features
-
-- 📌 Extracts text from PDFs using OCR  
-- 🌐 Translates Marathi text into English  
-- ⚡ End-to-end pipeline from input → output  
-- 💻 Web-based interface for easy usage  
-
----
-
-## 🛠 Tech Stack
-
-- Python  
-- OCR (Tesseract / OpenCV)  
-- NLP  
-- Flask / Web Framework (if used)  
-- Deployment: Render / Netlify  
-
+🔹 Features
+PDF text extraction
+Text preprocessing
+Language detection
+Automated translation
+Basic text analysis
+🔹 Tech Stack
+Python
+NLP techniques
+Text processing libraries
 ---
 
 ## 📸 Demo
